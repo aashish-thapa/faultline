@@ -18,6 +18,9 @@ history and verdict is in `runs/`.
 
 **Severity:** availability / gray failure. No acknowledged data was lost.
 
+**Status:** reported as [AutoMQ#3799](https://github.com/AutoMQ/automq/issues/3799).
+Maintainers confirmed the behavior and consider it expected under the current design (see below).
+
 **Setup:** AutoMQ 1.7.5 open source, the upstream 3-node compose with MinIO
 (`targets/automq`), a single-partition topic, `acks=all`, idempotent producer.
 
@@ -61,11 +64,16 @@ Published RTO figures ("under 30 seconds") describe node loss, not this case.
   the broker exit. The maintainers state the intended behavior for
   retryable storage errors is to "keep retrying until the operation succeeds".
   That confirms the stall is by design today, but it leaves no path to fail over.
-- No existing issue reports the leadership-retention stall (searched 2026-11-24).
+- [AutoMQ#3799](https://github.com/AutoMQ/automq/issues/3799) reports this finding. A maintainer
+  confirmed the stall and called it expected under the current design: failover covers brokers
+  that stop heartbeating, and a broker cannot tell on its own whether a storage outage is local
+  to it or shared by every broker. Moving leadership during a shared outage would not restore
+  writes. The follow-up proposes detection on the controller, which sees every broker's upload
+  health and can tell the two cases apart.
 
 **Reproduce:** `scripts/repro-automq-s3-stall.sh` (set `CUT_SECONDS` to change the outage length).
 
-**Possible fixes to propose upstream:** treat "WAL uploads stuck longer than X" as
+**Possible fixes (proposed in #3799):** treat "WAL uploads stuck longer than X" as
 a storage failure and hand it to the existing failure handler, or report WAL health
 in the broker heartbeat so the controller can fence the broker and run the
 existing WAL failover.
